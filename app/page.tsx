@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ShieldCheck, Scale, Bot, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FileUploadZone } from "@/components/upload/file-upload-zone";
+import { DocumentLibrary } from "@/components/library/document-library";
 
 export default function HomePage() {
   return (
@@ -29,7 +31,7 @@ export default function HomePage() {
       </header>
 
       <main className="flex-1 p-6 md:p-12">
-        <div className="mx-auto max-w-5xl space-y-8">
+        <div className="mx-auto max-w-5xl space-y-12">
           <div className="space-y-3 text-center">
             <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
               Contract Intelligence with{" "}
@@ -41,6 +43,16 @@ export default function HomePage() {
               Never trust hallucinated citations. Every quote is verified against canonical document
               offsets, jump-highlighted in the viewer, and backed by comprehensive coverage honesty.
             </p>
+          </div>
+
+          {/* Upload Section */}
+          <div id="upload" className="scroll-mt-24">
+            <FileUploadZone />
+          </div>
+
+          {/* Document Library */}
+          <div>
+            <DocumentLibrary />
           </div>
 
           <div className="grid gap-6 md:grid-cols-3 pt-6">
