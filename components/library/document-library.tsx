@@ -31,9 +31,46 @@ export interface DocItem {
   createdAt: string;
 }
 
+import { useRouter } from "next/navigation";
+import { GitCompare } from "lucide-react";
+
 export function DocumentLibrary() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
+  const [isComparing, setIsComparing] = React.useState<boolean>(false);
+
+  const handleCompare = async () => {
+    if (selectedIds.length !== 2) return;
+    setIsComparing(true);
+    toast.info("Generating contract comparison & redline analysis...");
+
+    try {
+      const res = await fetch("/api/compare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          docA: selectedIds[0],
+          docB: selectedIds[1],
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Comparison failed");
+      }
+
+      const data = await res.json();
+      toast.success("Comparison complete!");
+      router.push(`/compare/${data.comparisonId}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Comparison failed";
+      toast.error(msg);
+    } finally {
+      setIsComparing(false);
+    }
+  };
+
 
   const { data: documents, isLoading } = useQuery<DocItem[]>({
     queryKey: ["documents"],
@@ -113,11 +150,23 @@ export function DocumentLibrary() {
         </div>
 
         {selectedIds.length >= 2 && (
-          <Button asChild size="sm" className="shadow-xs animate-in fade-in">
-            <Link href={multiChatUrl}>
-              Multi-Document Chat ({selectedIds.length}) &rarr;
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2 animate-in fade-in">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleCompare}
+              disabled={isComparing || selectedIds.length !== 2}
+              className="shadow-xs gap-1.5"
+            >
+              <GitCompare className="h-3.5 w-3.5 text-primary" />
+              {isComparing ? "Comparing..." : "Compare Contracts (Diff)"}
+            </Button>
+            <Button asChild size="sm" className="shadow-xs">
+              <Link href={multiChatUrl}>
+                Multi-Doc Chat ({selectedIds.length}) &rarr;
+              </Link>
+            </Button>
+          </div>
         )}
       </div>
 
