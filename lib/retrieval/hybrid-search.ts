@@ -94,6 +94,34 @@ export async function hybridRetrieve(
     }
   });
 
+  if (documentIds.length > 1) {
+    // Balanced per-document retrieval so each contract is fairly represented
+    const perDocChunks: RetrievedChunk[] = [];
+    const perDocLimit = Math.max(4, Math.ceil(topK / documentIds.length));
+
+    for (const docId of documentIds) {
+      const docEntries = Array.from(scoreMap.values())
+        .filter((entry) => entry.chunk.documentId === docId)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, perDocLimit);
+
+      docEntries.forEach((entry) => {
+        perDocChunks.push({
+          id: entry.chunk.id,
+          documentId: entry.chunk.documentId,
+          idx: entry.chunk.idx,
+          pageStart: entry.chunk.pageStart,
+          pageEnd: entry.chunk.pageEnd,
+          sectionLabel: entry.chunk.sectionLabel,
+          text: entry.chunk.text,
+          score: entry.score,
+        });
+      });
+    }
+
+    return perDocChunks;
+  }
+
   const sorted = Array.from(scoreMap.values())
     .sort((a, b) => b.score - a.score)
     .slice(0, topK);
@@ -109,3 +137,4 @@ export async function hybridRetrieve(
     score: entry.score,
   }));
 }
+

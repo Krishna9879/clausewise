@@ -1,26 +1,56 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db/client";
 import { documents } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { ContractChat } from "@/components/chat/contract-chat";
+import { inArray } from "drizzle-orm";
+import { DocumentWorkspaceClient } from "@/components/viewer/workspace-client";
 import Link from "next/link";
-import { ArrowLeft, FileText } from "lucide-react";
+import { ArrowLeft, Layers, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default async function DocumentWorkspacePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ docs?: string }>;
 }) {
   const { id } = await params;
+  const sParams = await searchParams;
 
-  const doc = await db.query.documents.findFirst({
-    where: eq(documents.id, id),
+  const docIds = [id];
+  if (sParams?.docs) {
+    const extra = sParams.docs.split(",").map((s) => s.trim()).filter(Boolean);
+    for (const d of extra) {
+      if (!docIds.includes(d)) docIds.push(d);
+    }
+  }
+
+  const docRecords = await db.query.documents.findMany({
+    where: inArray(documents.id, docIds),
   });
 
-  if (!doc) {
+  if (docRecords.length === 0) {
     notFound();
   }
+
+  // Ensure initial primary document comes first
+  const sortedDocs = [...docRecords].sort((a, b) => {
+    if (a.id === id) return -1;
+    if (b.id === id) return 1;
+    return 0;
+  });
+
+  const viewerDocs = sortedDocs.map((d, idx) => ({
+    id: d.id,
+    name: d.name,
+    mime: d.mime,
+    text: d.text,
+    html: d.html,
+    pageCount: d.pageCount,
+    label: `D${idx + 1}`,
+  }));
+
+  const isMultiDoc = viewerDocs.length > 1;
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -33,40 +63,28 @@ export default async function DocumentWorkspacePage({
             </Link>
           </Button>
           <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-primary" />
-            <h2 className="font-semibold text-sm truncate max-w-md">{doc.name}</h2>
+            {isMultiDoc ? (
+              <Layers className="h-4 w-4 text-primary" />
+            ) : (
+              <FileText className="h-4 w-4 text-primary" />
+            )}
+            <h2 className="font-semibold text-sm truncate max-w-md">
+              {isMultiDoc
+                ? `Cross-Analysis (${viewerDocs.length} Contracts)`
+                : viewerDocs[0].name}
+            </h2>
           </div>
         </div>
 
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>{doc.pageCount ? `${doc.pageCount} pages` : "Document"}</span>
+          <span>{viewerDocs[0].pageCount ? `${viewerDocs[0].pageCount} pages` : "Document"}</span>
           <span>•</span>
-          <span className="font-medium text-emerald-600">Ready</span>
+          <span className="font-medium text-emerald-600">Verified Citations Active</span>
         </div>
       </header>
 
-      {/* Main Split Layout */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left / Center Chat Column */}
-        <div className="w-full md:w-1/2 border-r flex flex-col h-full">
-          <ContractChat documentId={doc.id} documentName={doc.name} />
-        </div>
-
-        {/* Right Document Preview Column */}
-        <div className="hidden md:flex md:w-1/2 flex-col h-full bg-muted/20 overflow-y-auto p-6 font-serif leading-relaxed text-sm">
-          <div className="max-w-2xl mx-auto space-y-4">
-            <div className="border-b pb-4">
-              <h1 className="text-xl font-bold font-sans">{doc.name}</h1>
-              <p className="text-xs text-muted-foreground font-sans mt-1">
-                Canonical Document Text &bull; {doc.charCount || doc.text?.length || 0} characters
-              </p>
-            </div>
-            <div className="whitespace-pre-wrap text-foreground/90 leading-7">
-              {doc.text || "No text available."}
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Main Workspace with Chat + Interactive Document Viewer */}
+      <DocumentWorkspaceClient initialDocuments={viewerDocs} />
     </div>
   );
 }

@@ -58,3 +58,40 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
+
+/* CSS Custom Highlight API Pseudo-elements */
+::highlight(cite) {
+  background-color: rgba(52, 211, 153, 0.4);
+  color: inherit;
+  border-radius: 2px;
+}
+
+::highlight(cite-active) {
+  background-color: rgba(16, 185, 129, 0.6);
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: #059669;
+  text-decoration-thickness: 2px;
+}
+
+::highlight(cite-dim) {
+  background-color: rgba(251, 191, 36, 0.35);
+  color: inherit;
+  border-radius: 2px;
+}
+
+/* Fallback highlight mark */
+mark.clause-highlight-active {
+  background-color: rgba(16, 185, 129, 0.6);
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+mark.clause-highlight-dim {
+  background-color: rgba(251, 191, 36, 0.35);
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+

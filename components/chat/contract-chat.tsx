@@ -1,7 +1,16 @@
 "use client";
 
 import React, { useState } from "react";
-import { Send, Square, ShieldCheck, AlertTriangle, FileText, CheckCircle2 } from "lucide-react";
+import {
+  Send,
+  Square,
+  ShieldCheck,
+  AlertTriangle,
+  FileText,
+  CheckCircle2,
+  ExternalLink,
+  Layers,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -23,20 +32,41 @@ export interface ChatMessage {
   };
 }
 
+export interface ChatDocumentInfo {
+  id: string;
+  name: string;
+  label?: string;
+}
+
+interface ContractChatProps {
+  documents: ChatDocumentInfo[];
+  onQuoteClick?: (quote: VerifiedQuote) => void;
+  // Backwards compatibility for single document usage
+  documentId?: string;
+  documentName?: string;
+}
+
 export function ContractChat({
+  documents: passedDocs,
+  onQuoteClick,
   documentId,
   documentName,
-}: {
-  documentId: string;
-  documentName: string;
-}) {
+}: ContractChatProps) {
+  // Normalize documents prop
+  const activeDocs: ChatDocumentInfo[] =
+    passedDocs && passedDocs.length > 0
+      ? passedDocs
+      : documentId
+      ? [{ id: documentId, name: documentName || "Document", label: "D1" }]
+      : [];
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
 
   const sendMessage = async () => {
-    if (!input.trim() || isStreaming) return;
+    if (!input.trim() || isStreaming || activeDocs.length === 0) return;
 
     const userText = input.trim();
     setInput("");
@@ -68,7 +98,7 @@ export function ContractChat({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          documentIds: [documentId],
+          documentIds: activeDocs.map((d) => d.id),
           message: userText,
           mode: "quick",
         }),
@@ -153,15 +183,32 @@ export function ContractChat({
     }
   };
 
+  const isMultiDoc = activeDocs.length > 1;
+
   return (
     <div className="flex h-full flex-col bg-background">
       {/* Header */}
-      <div className="flex h-14 items-center justify-between border-b px-4">
-        <div className="flex items-center gap-2">
-          <FileText className="h-4 w-4 text-primary" />
-          <span className="font-semibold text-sm truncate max-w-sm">{documentName}</span>
+      <div className="flex h-14 items-center justify-between border-b px-4 bg-card/60">
+        <div className="flex items-center gap-2 overflow-hidden">
+          {isMultiDoc ? (
+            <div className="flex items-center gap-1.5">
+              <Layers className="h-4 w-4 text-primary shrink-0" />
+              <span className="font-semibold text-xs truncate">
+                Multi-Contract Chat ({activeDocs.length} documents)
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <FileText className="h-4 w-4 text-primary shrink-0" />
+              <span className="font-semibold text-xs truncate max-w-sm">
+                {activeDocs[0]?.name || "Contract Workspace"}
+              </span>
+            </div>
+          )}
         </div>
-        <span className="text-xs text-muted-foreground font-medium">Quick Chat</span>
+        <span className="text-[11px] rounded-md bg-muted px-2 py-0.5 font-medium text-muted-foreground">
+          {isMultiDoc ? "Cross-Analysis" : "Quick Chat"}
+        </span>
       </div>
 
       {/* Messages */}
@@ -169,10 +216,14 @@ export function ContractChat({
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center p-8 text-muted-foreground">
             <ShieldCheck className="h-10 w-10 text-primary/40 mb-3" />
-            <h4 className="font-semibold text-foreground">Ask any contract question</h4>
+            <h4 className="font-semibold text-foreground text-sm">
+              {isMultiDoc
+                ? "Compare & query across selected contracts"
+                : "Ask any contract question"}
+            </h4>
             <p className="text-xs max-w-md mt-1">
-              Every answer is verified against exact contract text. Quotes are confirmed before
-              being highlighted.
+              Every answer is verified against exact document text. Click any citation chip to scroll
+              and highlight the exact passage in the contract viewer.
             </p>
           </div>
         ) : (
@@ -184,10 +235,10 @@ export function ContractChat({
               }`}
             >
               <div
-                className={`max-w-[85%] rounded-2xl p-4 text-sm ${
+                className={`max-w-[90%] rounded-2xl p-4 text-sm ${
                   msg.role === "user"
                     ? "bg-primary text-primary-foreground ml-auto"
-                    : "bg-card border shadow-sm"
+                    : "bg-card border shadow-xs"
                 }`}
               >
                 {/* Coverage Badge for Assistant */}
@@ -214,7 +265,7 @@ export function ContractChat({
 
                 <div className="prose dark:prose-invert prose-sm max-w-none leading-relaxed">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {msg.content || (isStreaming && msg.role === "assistant" ? "Thinking..." : "")}
+                    {msg.content || (isStreaming && msg.role === "assistant" ? "Analyzing..." : "")}
                   </ReactMarkdown>
                 </div>
 
@@ -227,30 +278,51 @@ export function ContractChat({
                     <div className="grid gap-2">
                       {msg.quotes.map((q: VerifiedQuote, idx: number) => {
                         const isVerified = q.status === "verified";
+                        const docLabel = q.docId || "D1";
+                        const docName =
+                          q.docName ||
+                          activeDocs.find(
+                            (d, i) => d.id === q.docId || `D${i + 1}` === q.docId
+                          )?.name;
+
                         return (
                           <div
                             key={idx}
-                            className={`rounded-lg border p-2.5 text-xs ${
+                            onClick={() => onQuoteClick?.(q)}
+                            className={`rounded-lg border p-2.5 text-xs transition-all cursor-pointer hover:shadow-xs group ${
                               isVerified
-                                ? "border-emerald-200 bg-emerald-500/5 dark:border-emerald-900"
+                                ? "border-emerald-200 bg-emerald-500/5 hover:border-emerald-400 dark:border-emerald-900"
                                 : "border-rose-200 bg-rose-500/5 dark:border-rose-900"
                             }`}
                           >
-                            <div className="flex items-center justify-between mb-1">
-                              <span
-                                className={`font-semibold ${
-                                  isVerified ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600"
-                                }`}
-                              >
-                                {isVerified ? "Verified Citation ✓" : "Unverified ⚠"}
-                              </span>
-                              {q.occurrences?.[0]?.pageStart && (
-                                <span className="text-[10px] text-muted-foreground">
-                                  Page {q.occurrences[0].pageStart}
+                            <div className="flex items-center justify-between mb-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className={`font-semibold ${
+                                    isVerified
+                                      ? "text-emerald-700 dark:text-emerald-400"
+                                      : "text-rose-600"
+                                  }`}
+                                >
+                                  {isVerified ? "Verified Citation ✓" : "Unverified ⚠"}
                                 </span>
-                              )}
+                                {isMultiDoc && (
+                                  <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                                    {docLabel} {docName ? `• ${docName.slice(0, 15)}...` : ""}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                {q.occurrences?.[0]?.pageStart && (
+                                  <span>Page {q.occurrences[0].pageStart}</span>
+                                )}
+                                <span className="opacity-0 group-hover:opacity-100 flex items-center text-primary font-medium text-[10px] transition-opacity">
+                                  View <ExternalLink className="h-3 w-3 ml-0.5" />
+                                </span>
+                              </div>
                             </div>
-                            <p className="font-serif italic text-muted-foreground line-clamp-3">
+                            <p className="font-serif italic text-muted-foreground/90 line-clamp-3">
                               &ldquo;{q.text}&rdquo;
                             </p>
                           </div>
@@ -266,7 +338,7 @@ export function ContractChat({
       </div>
 
       {/* Input */}
-      <div className="border-t p-4">
+      <div className="border-t p-4 bg-card/40">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -278,8 +350,12 @@ export function ContractChat({
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about liability, termination, payment terms..."
-            className="flex-1 rounded-xl border bg-card px-4 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            placeholder={
+              isMultiDoc
+                ? "Compare indemnification, liability caps, governing law..."
+                : "Ask about liability, termination, payment terms..."
+            }
+            className="flex-1 rounded-xl border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             disabled={isStreaming}
           />
 

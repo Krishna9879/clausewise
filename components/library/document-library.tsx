@@ -33,6 +33,7 @@ export interface DocItem {
 
 export function DocumentLibrary() {
   const queryClient = useQueryClient();
+  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
 
   const { data: documents, isLoading } = useQuery<DocItem[]>({
     queryKey: ["documents"],
@@ -66,6 +67,12 @@ export function DocumentLibrary() {
     },
   });
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-36 items-center justify-center rounded-xl border bg-card">
@@ -86,10 +93,32 @@ export function DocumentLibrary() {
     );
   }
 
+  const multiChatUrl =
+    selectedIds.length > 0
+      ? `/d/${selectedIds[0]}${
+          selectedIds.length > 1 ? `?docs=${selectedIds.slice(1).join(",")}` : ""
+        }`
+      : "";
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-lg">Document Library ({documents.length})</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-lg">Document Library ({documents.length})</h3>
+          {selectedIds.length > 0 && (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+              {selectedIds.length} selected
+            </span>
+          )}
+        </div>
+
+        {selectedIds.length >= 2 && (
+          <Button asChild size="sm" className="shadow-xs animate-in fade-in">
+            <Link href={multiChatUrl}>
+              Multi-Document Chat ({selectedIds.length}) &rarr;
+            </Link>
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-3">
@@ -97,13 +126,27 @@ export function DocumentLibrary() {
           const isReady = doc.status === "ready";
           const isFailed = doc.status === "failed";
           const isProcessing = !isReady && !isFailed;
+          const isSelected = selectedIds.includes(doc.id);
 
           return (
             <div
               key={doc.id}
-              className="flex items-center justify-between rounded-xl border bg-card p-4 transition-all hover:shadow-sm"
+              className={`flex items-center justify-between rounded-xl border bg-card p-4 transition-all hover:shadow-xs ${
+                isSelected ? "border-primary/60 ring-1 ring-primary/40 bg-primary/5" : ""
+              }`}
             >
               <div className="flex items-center gap-3 min-w-0">
+                {/* Multi-select checkbox */}
+                {isReady && (
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleSelect(doc.id)}
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer shrink-0"
+                    title="Select for multi-document chat"
+                  />
+                )}
+
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <FileText className="h-5 w-5" />
                 </div>
@@ -184,3 +227,4 @@ export function DocumentLibrary() {
     </div>
   );
 }
+
